@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: call_qc_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: call_qc
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: call_qc_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: call_qc_api
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/call_qc
+      - SYNC_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/call_qc
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GOOGLE_DRIVE_SOURCE_FOLDER_ID=${GOOGLE_DRIVE_SOURCE_FOLDER_ID}
+      - GOOGLE_DRIVE_WORKING_FOLDER_ID=${GOOGLE_DRIVE_WORKING_FOLDER_ID}
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
+      - GOOGLE_CREDENTIALS_PATH=/app/credentials.json
+      - LOCAL_STORAGE_DIR=/app/storage
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      - RESET_DB=${RESET_DB:-false}
+      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-small}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-ru}
+      - WHISPER_INITIAL_PROMPT=${WHISPER_INITIAL_PROMPT}
+    ports:
+      - "8000:8000"
+    volumes:
+      - shared_storage:/app/storage
+      - ./credentials.json:/app/credentials.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker-transcription:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: call_qc_worker_transcription
+    command: celery -A app.workers.tasks.celery_app worker -Q transcription -c 1 --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/call_qc
+      - SYNC_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/call_qc
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GOOGLE_DRIVE_SOURCE_FOLDER_ID=${GOOGLE_DRIVE_SOURCE_FOLDER_ID}
+      - GOOGLE_DRIVE_WORKING_FOLDER_ID=${GOOGLE_DRIVE_WORKING_FOLDER_ID}
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
+      - GOOGLE_CREDENTIALS_PATH=/app/credentials.json
+      - LOCAL_STORAGE_DIR=/app/storage
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-small}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-ru}
+      - WHISPER_INITIAL_PROMPT=${WHISPER_INITIAL_PROMPT}
+    volumes:
+      - shared_storage:/app/storage
+      - ./credentials.json:/app/credentials.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker-general:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: call_qc_worker_general
+    command: celery -A app.workers.tasks.celery_app worker -Q general --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/call_qc
+      - SYNC_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/call_qc
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GOOGLE_DRIVE_SOURCE_FOLDER_ID=${GOOGLE_DRIVE_SOURCE_FOLDER_ID}
+      - GOOGLE_DRIVE_WORKING_FOLDER_ID=${GOOGLE_DRIVE_WORKING_FOLDER_ID}
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
+      - GOOGLE_CREDENTIALS_PATH=/app/credentials.json
+      - LOCAL_STORAGE_DIR=/app/storage
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-small}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-ru}
+      - WHISPER_INITIAL_PROMPT=${WHISPER_INITIAL_PROMPT}
+    volumes:
+      - shared_storage:/app/storage
+      - ./credentials.json:/app/credentials.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  shared_storage:
