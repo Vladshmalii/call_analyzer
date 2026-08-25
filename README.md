@@ -87,6 +87,7 @@ This starts:
 - `GET /api/v1/metrics`: Provides aggregated compliance statistics (mean rating, violations counts).
 - `GET /api/v1/calls`: Lists all ingested and analyzed phone logs.
 - `GET /api/v1/calls/{id}`: Detailed analytical breakdown of a single call showing transcription segments, AI evaluations, and job histories.
+- `DELETE /api/v1/calls/{id}`: Deletes a call record and cascades removal to all associated transcripts, jobs, logs, and AI analyses (returns `204 No Content` on success, `404 Not Found` if missing).
 - `POST /api/v1/reprocess/{id}`: Forces selective reprocessing of a failed processing pipeline.
 
 ---
