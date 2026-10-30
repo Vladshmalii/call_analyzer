@@ -48,6 +48,20 @@ async def get_call(id: UUID, db: AsyncSession = Depends(get_db)):
         )
     return call
 
+@router.delete("/calls/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_call(id: UUID, db: AsyncSession = Depends(get_db)):
+    repo = CallRepository(db)
+
+    deleted = await repo.delete(id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Call record not found"
+        )
+
+    await db.commit()
+    return None
+
 @router.post("/reprocess/{id}", response_model=CallResponse)
 async def reprocess_call(id: UUID, db: AsyncSession = Depends(get_db)):
     repo = CallRepository(db)
